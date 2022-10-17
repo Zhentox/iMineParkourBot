@@ -347,7 +347,8 @@ async function suspiciousLevelDelete(level) {
 
 
 client.on("ready", async () => {
-    console.log("El bot inicio correctamente")
+    //Spam console
+    /* console.log("El bot inicio correctamente") */
 
     //DiscordChannels
     let alertChannel = client.channels.cache.find(channel => channel.id === process.env.AlertChannel);
