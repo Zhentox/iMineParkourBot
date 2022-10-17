@@ -1,23 +1,18 @@
-//NPM Package install
 const axios = require("axios");
 const cheerio = require("cheerio");
 const discordJS = require ("discord.js")
-const fs = require('fs');
-const path = require('path');
 const { Client } = require('pg');
 
-//DB configuration
-
+//DB Connect
 const db = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: {
       rejectUnauthorized: false
     }
 });
-
 db.connect();
 
-//Discord configuration
+//DC Config
 const client = new discordJS.Client({
     intents: [
         discordJS.Intents.FLAGS.GUILDS,
@@ -27,7 +22,6 @@ const client = new discordJS.Client({
 const token = process.env.TokenBot;
 client.login(token);
 
-//Fecha y hora actual
 function fechaHoraHoy() {
     let hoy = new Date(),
         dia = hoy.getDate(),
@@ -215,7 +209,6 @@ function fechaHoraHoy() {
     return registro
 };
 
-//Traigo la data de la pagina
 const getData = async () => {
     const res = await axios('https://estadisticas.iminecrafting.me/parkour.php#arenas')
     const $ = cheerio.load(res.data)
@@ -231,19 +224,17 @@ const getData = async () => {
         fetchedData.push(link)        
     })
 
-    //Get userName
     for(let i = 0; i < fetchedData[1].length; i++) {
         for(let j = 1; j < 2; j++) {
             userName.push(fetchedData[1][i].children[1].children[1].children[4].children[j].children[1].data.slice(1,))             
         }
     }
 
-    //Get userRecordTime
     for(let i = 0; i < fetchedData[1].length; i++) {
         userRecordTime.push(fetchedData[1][i].children[1].children[1].children[4].children[2].children[0].children[0].data)
     }
 
-    //userName + userRecordTime + RegisterTime
+    //Merge userName + userRecordTime + RegisterTime
     for(let i = 0; i < fetchedData[1].length; i++) {
         switch(acc) {
             case 1:
@@ -285,38 +276,32 @@ const getData = async () => {
     return finalData;
 }
 
-//Traigo la data de la DB
 const getTops = async () => {
     const res = await db.query('select * from tops order by "id"')
     return res.rows;
 }
 
-//Traigo los usuarios confiables de la DB
 const getTrustedUsers = async () => {
     const res = await db.query('select * from trustuser')
     return res.rows;
 }
 
-//Traigo los usuarios confiables de la DB
 const getsuspiciousLevels = async () => {
     const res = await db.query('select * from suspiciouslevels')
     return res.rows;
 }
 
-//Traigo todos los logs
 const getLogs = async () => {
     const res = await db.query('select * from logs')
     return res.rows;
 }
 
-//Traigo 18 logs
 const get18Logs = async () => {
     const res = await db.query('select * from logs order by id desc limit 18')
     let logs = res.rows.reverse()
     return logs;
 }
 
-//Actualizar db de tops
 async function topsUpdate(level, name, recordtime, day, hour) {
     const query = `UPDATE "tops" 
                SET "level" = $1, "name" = $2, "recordtime" = $3, "day" = $4, "hour" = $5
@@ -329,7 +314,6 @@ async function topsUpdate(level, name, recordtime, day, hour) {
     }
 }
 
-//Agregar nuevos logs a la db
 async function logsInsert(level, name, recordtime, day, hour) {
     const query = `INSERT INTO "logs" ("level", "name", "recordtime", "day", "hour") VALUES($1, $2, $3, $4, $5)`
 
@@ -340,7 +324,6 @@ async function logsInsert(level, name, recordtime, day, hour) {
     }
 }
 
-//Agregar nuevo top sospechoso a la db
 async function suspiciousLevelInsert(level, name, recordtime, day, hour) {
     const query = `INSERT INTO "suspiciouslevels" ("level", "name", "recordtime", "day", "hour") VALUES($1, $2, $3, $4, $5)`
 
@@ -351,7 +334,6 @@ async function suspiciousLevelInsert(level, name, recordtime, day, hour) {
     }
 }
 
-//Eliminar top sospechoso de la DB
 async function suspiciousLevelDelete(level) {
     const query = `DELETE FROM "suspiciouslevels" 
                WHERE "level" = $1`;
@@ -365,19 +347,17 @@ async function suspiciousLevelDelete(level) {
 
 
 client.on("ready", async () => {
-    //Arranca el bot
     console.log("El bot inicio correctamente")
 
     //DiscordChannels
-    let alertChannel = client.channels.cache.find(channel => channel.id === "964427832484855879");
-    let levelBotChannel = client.channels.cache.find(channel => channel.id === "964425168506208316");
-    let logsChannel = client.channels.cache.find(channel => channel.id === "964628766536118272");
+    let alertChannel = client.channels.cache.find(channel => channel.id === process.env.AlertChannel);
+    let levelBotChannel = client.channels.cache.find(channel => channel.id === process.env.levelBotChannel);
+    let logsChannel = client.channels.cache.find(channel => channel.id === process.env.logsChannel);
 
     setInterval(async () => {
 
         console.log("Ultimo chequeo: " + fechaHoraHoy().fecha + " " + fechaHoraHoy().hora)
 
-        //Traigo la data de la DB
         let dataFetch = await getData();
         let dataDB = await getTops();
         let trustedUsers = await getTrustedUsers();
@@ -388,20 +368,17 @@ client.on("ready", async () => {
         let suspiciousLevelsChange = false;
         let logsChange = false;
 
-        //Recorro toda la DB
         for(let i = 0; i < dataDB.length; i++) {
-            //Mensajes prefabricados
+
             let messageReply = {
-                criticalAlert: `🚨 **CRITICAL ALERT** 🚨\n\n🔸 Se registro un nuevo record en el **${dataFetch[i].level}** hecho por **${dataFetch[i].name}** con un recordtime de **${dataFetch[i].recordtime}**\n🔸 El record anterior era de **${dataDB[i].name}** con un tiempo de **${dataDB[i].recordtime}**\n\n🔹 **Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataFetch[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataFetch[i].name}\n\n📝 Record registrado el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n➡️ Puedes ver la lista de TOPs sospechosos actualizada en <#${"966009611914190938"}>\n<@&${"961713050061266995"}>`,
+                criticalAlert: `🚨 **CRITICAL ALERT** 🚨\n\n🔸 Se registro un nuevo record en el **${dataFetch[i].level}** hecho por **${dataFetch[i].name}** con un tiempo de **${dataFetch[i].recordtime}**\n🔸 El record anterior era de **${dataDB[i].name}** con un tiempo de **${dataDB[i].recordtime}**\n\n🔹 **Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataFetch[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataFetch[i].name}\n\n📝 Record registrado el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n➡️ Puedes ver la lista de TOPs sospechosos actualizada en <#${"966009611914190938"}>\n<@&${"961713050061266995"}>`,
                 warning: `⚠️ **ATENCIÓN** ⚠️\n\n🔸 Puede que se haya eliminado el record del **${dataDB[i].level}** hecho por **${dataDB[i].name}** con un tiempo de **${dataDB[i].recordtime}**.\n🔸 O puede que el usuario **${dataFetch[i].name}** haya pasado el record del usuario en cuestion.\n\n🔹 **Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataDB[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataDB[i].name}\n\n➡️ Puedes ver la lista de TOPs sospechosos actualizada en <#${"966009611914190938"}>\n\n📝 Este cambio sucedio el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n<@&${"965011713609044008"}>`,
                 autoNewRecord: `🕛 **ENHORABUENA ${dataFetch[i].name}** 🕛\n\n🔸 **${dataFetch[i].name}** ha superado su propio record en el **${dataFetch[i].level}** con un tiempo de **${dataFetch[i].recordtime}**\n🔸 Su record anterior fue de **${dataDB[i].recordtime}**\n\n**🔹 Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataFetch[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataFetch[i].name}\n\n📝 Record registrado el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n<@&${"965011713609044008"}>`,
-                newTrustRecord: `👑 **¿QUÉ PASO REY/REINA?** 👑\n\n🔸 Se registro un nuevo record en el **${dataFetch[i].level}** hecho por **${dataFetch[i].name}** con un tiempo de **${dataFetch[i].recordtime}**\n🔸 El record anterior era de **${dataDB[i].name}** con un recordtime de **${dataDB[i].recordtime}**\n🔸 A practicar mas **${dataDB[i].name}**, no te pueden pasar asi... 😎\n\n🔹 **Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataFetch[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataFetch[i].name}\n\n📝 Record registrado el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n<@&${"965011713609044008"}>`
+                newTrustRecord: `👑 **¿QUÉ PASO REY/REINA?** 👑\n\n🔸 Se registro un nuevo record en el **${dataFetch[i].level}** hecho por **${dataFetch[i].name}** con un tiempo de **${dataFetch[i].recordtime}**\n🔸 El record anterior era de **${dataDB[i].name}** con un tiempo de **${dataDB[i].recordtime}**\n🔸 A practicar mas **${dataDB[i].name}**, no te pueden pasar asi... 😎\n\n🔹 **Estadisticas del usuario:** ${"https://estadisticas.iminecrafting.me/parkour.php?u=" + dataFetch[i].name}\n🔹 **Sanciones del usuario:** ${"https://sanciones.iminecrafting.me/usuario/" + dataFetch[i].name}\n\n📝 Record registrado el **${dataFetch[i].day}** a las **${dataFetch[i].hour}** aproximadamente (GM-3)\n<@&${"965011713609044008"}>`
             }
 
-            //Pregunto si hubieron cambios en la DB.
             if(dataDB[i].recordtime == dataFetch[i].recordtime) {
-                //No hay cambios
-                /* console.log("No hay cambios") */
+                console.log("No hay cambios")
             } else {
                 //Si hay cambios
                 //¿El record lo hace un usuario confiable?
@@ -417,7 +394,7 @@ client.on("ready", async () => {
                     suspiciousLevelsChange = true;
                     logsChange = true; 
                 } else {
-                    //Pregunto si el record aterior lo tiene un TrustLevel
+                    //El record lo hizo un usuario confiable ya sea porque realmente lo hizo o porque un record sospechoso fue eliminado
                     let busqueda = trustedUsers.find(element => element.name == dataDB[i].name)
                     if(busqueda != undefined) {
                         //¿De quien era el record?
@@ -437,7 +414,7 @@ client.on("ready", async () => {
                             logsChange = true; 
                         }
                     } else {
-                        //El record anterior no lo tiene un usuario confiable
+                        //El record anterior no lo tiene un usuario confiable --> Eliminacion de un record sospechoso
                         console.log("Borraron los TOPS o un usuario confiable paso un record sospechoso")
                         alertChannel.send(messageReply.warning)
                         await topsUpdate(dataFetch[i].level, dataFetch[i].name, dataFetch[i].recordtime, dataFetch[i].day, dataFetch[i].hour);
@@ -451,7 +428,6 @@ client.on("ready", async () => {
         logs = await get18Logs();
         suspiciousLevels = await getsuspiciousLevels();
 
-        //Actualiza los levels sospechosos del momento
         if(suspiciousLevelsChange) {
             console.log("Actualizo niveles sospechosos")
 
@@ -467,7 +443,6 @@ client.on("ready", async () => {
                 });
         }
     
-        //Si detecta cambios en los LOGS, los manda por dc
         if(logsChange) {
             console.log("Actualizo logs")
 
@@ -490,8 +465,8 @@ client.on('message', async (message) => {
     let suspiciousLevels = await getsuspiciousLevels();
     let logs = await getLogs();
 
-    let levelBotChannel = client.channels.cache.find(channel => channel.id === "964425168506208316");
-    let logsChannel = client.channels.cache.find(channel => channel.id === "964628766536118272");
+    let levelBotChannel = client.channels.cache.find(channel => channel.id === process.env.levelBotChannel);
+    let logsChannel = client.channels.cache.find(channel => channel.id === process.env.logsChannel);
 
     if (message.content == "!topreload") {
 
